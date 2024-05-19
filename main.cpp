@@ -1,40 +1,51 @@
 #include <string>
 #include <iostream>
 #include <algorithm>
-#include "tclap/CmdLine.h"
+#include <tclap/CmdLine.h>
+#include <opencv2/opencv.hpp>
+
 
 using namespace TCLAP;
 using namespace std;
+using namespace cv;
+
 
 int main(int argc, char **argv) {
-    try {
-        // Define the command line object.
-        CmdLine cmd("Command description message", ' ', "0.9");
+    // Open the default camera (index 0)
+    VideoCapture cap(0, CAP_DSHOW);
 
-        // Define a value argument and add it to the command line.
-        ValueArg<string> nameArg("n", "name", "Name to print", true, "homer",
-                                 "string");
-        cmd.add(nameArg);
-
-        // Define a switch and add it to the command line.
-        SwitchArg reverseSwitch("r", "reverse", "Print name backwards", false);
-        cmd.add(reverseSwitch);
-
-        // Parse the args.
-        cmd.parse(argc, argv);
-
-        // Get the value parsed by each arg.
-        string name = nameArg.getValue();
-        bool reverseName = reverseSwitch.getValue();
-
-        // Do what you intend too...
-        if (reverseName) {
-            reverse(name.begin(), name.end());
-            cout << "My name (spelled backwards) is: " << name << endl;
-        } else
-            cout << "My name is: " << name << endl;
-    } catch (ArgException &e) // catch any exceptions
-    {
-        cerr << "error: " << e.error() << " for arg " << e.argId() << endl;
+    // Check if camera opened successfully
+    if (!cap.isOpened()) {
+        std::cerr << "Error opening camera!" << std::endl;
+        return 1;
     }
+
+    // Create a window to display the camera feed
+    namedWindow("Camera", WINDOW_AUTOSIZE);
+
+    while (true) {
+        // Capture frame-by-frame
+        Mat frame;
+        cap >> frame;
+
+        // Check if frame is read correctly
+        if (frame.empty()) {
+            std::cerr << "Can't receive frame (stream end?). Exiting..." << std::endl;
+            break;
+        }
+
+        // Display the resulting frame
+        imshow("Camera", frame);
+
+        // Wait for 'q' key to close the window
+        if (waitKey(1) == 'q') {
+            break;
+        }
+    }
+
+    // Release capture and close window
+    cap.release();
+    destroyAllWindows();
+
+    return 0;
 }
