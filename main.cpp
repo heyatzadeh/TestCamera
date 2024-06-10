@@ -5,6 +5,8 @@
 #include <ctime>
 #include <filesystem>
 #include <sstream>
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/basic_file_sink.h>
 
 
 using namespace TCLAP;
@@ -35,6 +37,16 @@ bool create_directory(const std::string &folderPath);
 
 int main(int argc, char **argv) {
     try {
+        const auto timestamp = get_timestamp();
+        const auto directory = "./Result_" + timestamp;
+
+        create_directory(directory);
+
+        auto logger = spdlog::basic_logger_mt("CameraTest", directory + "/" + timestamp + ".log");
+        spdlog::set_default_logger(logger);
+
+        spdlog::info("********** Starting Application **********");
+
         CmdLine cmd("Command description message", ' ', "0.9");
 
         ValueArg<uint> timeArg("t", "time", "time for video", false, 100, "default is 100");
@@ -56,34 +68,32 @@ int main(int argc, char **argv) {
 
         int cameraIndex = cameraIndexArg.getValue();
         bool simulateWebAtm = simulateWebAtmSwitch.getValue();
-        int height = heightArg.getValue();
         int width = widthArg.getValue();
+        int height = heightArg.getValue();
         uint time = timeArg.getValue();
 
         // Open the default camera (index 0)
+        spdlog::info("Opening Camera with id: {}", cameraIndex);
         VideoCapture cap(cameraIndex, CAP_DSHOW);
 
         // Check if camera opened successfully
         if (!cap.isOpened()) {
+            spdlog::critical("Could not open Camera with id: {}", cameraIndex);
             std::cerr << "Error opening camera!" << std::endl;
             return 1;
         }
 
         if (simulateWebAtm) {
+            spdlog::info("Simulating web-atm resulotion: {}x{}", 320, 240);
             time = time / 10;
             cap.set(CAP_PROP_FRAME_WIDTH, 320);
             cap.set(CAP_PROP_FRAME_HEIGHT, 240);
         } else {
+            spdlog::info("Resulotion: {}x{}", width, height);
             cap.set(CAP_PROP_FRAME_WIDTH, width);
             cap.set(CAP_PROP_FRAME_HEIGHT, height);
         }
 
-
-        const auto timestamp = get_timestamp();
-        const auto directory = "./Result_" + timestamp;
-
-
-        create_directory(directory);
 
         for (const auto &[fourcc, type]: codec) {
             const auto fourccInt = VideoWriter::fourcc(fourcc[0], fourcc[1], fourcc[2], fourcc[3]);
@@ -96,6 +106,7 @@ int main(int argc, char **argv) {
                          : VideoWriter(filename, fourccInt, 25.0, Size(width, height));
 
             if (!writer.isOpened()) {
+                spdlog::error("Could not open the output video file for write. Config: " + fourcc + ' ' + type);
                 cerr << "Could not open the output video file for write\n";
                 writer.release();
                 continue;
@@ -106,6 +117,7 @@ int main(int argc, char **argv) {
                 cap >> frame;
 
                 if (frame.empty()) {
+                    spdlog::error("Can't receive frame (stream end?). Exiting... . Config: " + fourcc + ' ' + type);
                     std::cerr << "Can't receive frame (stream end?). Exiting...\n";
                     break;
                 }
@@ -117,8 +129,10 @@ int main(int argc, char **argv) {
 
             writer.release();
             std::cout << fourcc << " ." << type << " done\n";
+            spdlog::info("config: " + fourcc + " " + type + " Done.");
         }
         cap.release();
+        spdlog::info("********** Ending Application **********");
 
         return 0;
     } catch (ArgException &e) {
